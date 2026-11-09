@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>塗装営業 進捗報告システム</title>
+  <!-- LINE LIFF SDK -->
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    :root {
+      --primary: #1F497D;
+      --accent: #06C755; /* LINE Green */
+      --bg: #F3F4F6;
+      --card: #FFFFFF;
+      --text: #1F2937;
+      --border: #D1D5DB;
+      --danger: #DC2626;
+    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    body { margin: 0; padding: 0; background-color: var(--bg); color: var(--text); font-size: 16px; }
+    header { background-color: var(--primary); color: #fff; padding: 14px 16px; text-align: center; font-weight: bold; font-size: 18px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .container { padding: 16px; max-width: 600px; margin: 0 auto; }
+    .staff-badge { background: #E0E7FF; color: #1E3A8A; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+    
+    /* タブ切替 */
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab-btn { flex: 1; padding: 12px 8px; border: 2px solid var(--primary); background: #fff; color: var(--primary); font-weight: bold; border-radius: 8px; cursor: pointer; font-size: 15px; transition: 0.2s; }
+    .tab-btn.active { background: var(--primary); color: #fff; }
+    
+    .card { background: var(--card); border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 16px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px; }
+    .req { background: var(--danger); color: #fff; font-size: 11px; padding: 2px 5px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+    input[type="text"], input[type="tel"], input[type="number"], input[type="datetime-local"], input[type="date"], select, textarea {
+      width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; background: #fff;
+    }
+    textarea { resize: vertical; min-height: 70px; }
+    
+    /* 写真アップロード枠 */
+    .photo-box { border: 2px dashed var(--border); border-radius: 8px; padding: 12px; text-align: center; background: #F9FAFB; cursor: pointer; }
+    .photo-preview { max-width: 100%; max-height: 160px; margin-top: 8px; border-radius: 6px; display: none; }
+    
+    /* ボタン */
+    .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 8px; }
+    .btn-submit { background: var(--accent); color: #fff; box-shadow: 0 2px 4px rgba(6,199,85,0.3); }
+    .btn-qr { background: #2563EB; color: #fff; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn:disabled { background: #9CA3AF; cursor: not-allowed; }
+    
+    .hidden { display: none; }
+    #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<header>塗装営業 現場報告システム</header>
+
+<div id="loadingOverlay">
+  <div>読み込み中...</div>
+</div>
+
+<div class="container">
+  <!-- ログイン担当者表示 -->
+  <div class="staff-badge">
+    <span>担当：<strong id="displayStaffName">取得中...</strong></span>
+    <span id="statusIndicator" style="font-size:12px;">LINE認証済</span>
+  </div>
+
+  <!-- メインモード切替タブ -->
+  <div class="tabs">
+    <button type="button" class="tab-btn active" id="tabRegister" onclick="switchMode('register')">① 新規登録<br><span style="font-size:11px;font-weight:normal;">(初回飛び込み)</span></button>
+    <button type="button" class="tab-btn" id="tabUpdate" onclick="switchMode('update')">② 進捗報告<br><span style="font-size:11px;font-weight:normal;">(打設・見積・契約)</span></button>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- モード①：新規登録（ファーストコンタクト）     -->
+  <!-- ========================================== -->
+  <form id="formRegister" class="card" onsubmit="submitForm(event, 'register')">
+    <div class="form-group">
+      <label>開始ルート選択<span class="req">必須</span></label>
+      <select id="startRoute" onchange="toggleRouteFields()" required>
+        <option value="コーキング取得から">コーキング取得から（標準）</option>
+        <option value="見積取得から">見積取得から（外壁全体希望）</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>お客様名（苗字）<span class="req">必須</span></label>
+      <input type="text" id="regLastName" placeholder="例：佐藤" required>
+    </div>
+
+    <div class="form-group">
+      <label>ご住所<span class="req">必須</span></label>
+      <input type="text" id="regAddress" placeholder="例：世田谷区桜丘1-2-3" required>
+    </div>
+
+    <!-- コーキング取得ルート用項目 -->
+    <div id="caulkingFields">
+      <div class="form-group">
+        <label>コーキング打設予定日<span class="req">必須</span></label>
+        <input type="datetime-local" id="caulkingDate">
+      </div>
+      <div class="form-group">
+        <label>コーキングの色<span class="req">必須</span></label>
+        <select id="caulkingColor">
+          <option value="ホワイト">ホワイト</option>
+          <option value="グレー">グレー</option>
+          <option value="アンバー">アンバー</option>
+          <option value="ブラック">ブラック</option>
+          <option value="特注色">特注色</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 見積取得ルート用項目 -->
+    <div id="estimateFields" class="hidden">
+      <div class="form-group">
+        <label>電話番号<span class="req">必須</span></label>
+        <input type="tel" id="regPhone" placeholder="例：090-1234-5678">
+      </div>
+      <div class="form-group">
+        <label>見積提示予定日<span class="req">必須</span></label>
+        <input type="datetime-local" id="regEstimateDate">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>次回予定日カード写真（お渡し前控え）<span class="req">必須</span></label>
+      <div class="photo-box" onclick="document.getElementById('cardPhotoInput').click()">
+        📷 タップしてカードを撮影・選択
+        <input type="file" id="cardPhotoInput" accept="image/*" capture="environment" class="hidden" onchange="previewImage(this, 'cardPhotoPreview')">
+        <img id="cardPhotoPreview" class="photo-preview">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>備考・建物特徴メモ</label>
+      <textarea id="regMemo" placeholder="例：サイディング目地割れ大、犬あり"></textarea>
+    </div>
+
+    <button type="submit" class="btn btn-submit">新規登録を送信する</button>
+  </form>
+
+  <!-- ========================================== -->
+  <!-- モード②：進捗報告（QR読取 / 名寄せ更新）     -->
+  <!-- ========================================== -->
+  <form id="formUpdate" class="card hidden" onsubmit="submitForm(event, 'update')">
+    <button type="button" class="btn btn-qr" onclick="scanQRCode()">📷 カードのQRコードを読み取る</button>
+
+    <div class="form-group">
+      <label>案件番号（QR読取で自動入力）</label>
+      <input type="text" id="updCaseId" placeholder="例：C-0001">
+    </div>
+
+    <div style="font-size:12px; color:#6B7280; margin-bottom:10px;">
+      ※カードが手元にない場合は下の苗字・住所で照合します
+    </div>
+    <div class="form-group">
+      <label>お客様名（苗字）</label>
+      <input type="text" id="updLastName" placeholder="例：佐藤">
+    </div>
+    <div class="form-group">
+      <label>ご住所</label>
+      <input type="text" id="updAddress" placeholder="例：世田谷区桜丘1-2-3">
+    </div>
+
+    <hr style="border:none; border-top:1px solid #E5E7EB; margin:16px 0;">
+
+    <div class="form-group">
+      <label>報告する工程（フェーズ）<span class="req">必須</span></label>
+      <select id="updatePhase" onchange="togglePhaseFields()" required>
+        <option value="caulking_done">① コーキング打設完了（写真・見積日）</option>
+        <option value="estimate_done">② 見積実施（提示金額・相見積状況）</option>
+        <option value="contract_done">③ 商談結果（契約締結 / 失注）</option>
+        <option value="date_change">④ 予定日の変更報告</option>
+      </select>
+    </div>
+
+    <!-- ① 打設完了用フィールド -->
+    <div id="phaseCaulking">
+      <div class="form-group">
+        <label>打設完了日<span class="req">必須</span></label>
+        <input type="date" id="caulkingDoneDate">
+      </div>
+      <div class="form-group">
+        <label>施工担当者</label>
+        <input type="text" id="craftsmanName" placeholder="例：佐藤（職人）">
+      </div>
+      <div class="form-group">
+        <label>打設写真①（引き・全体）<span class="req">必須</span></label>
+        <div class="photo-box" onclick="document.getElementById('photoWideInput').click()">
+          📷 引きの写真を撮影・選択
+          <input type="file" id="photoWideInput" accept="image/*" capture="environment" class="hidden" onchange="previewImage(this, 'photoWidePreview')">
+          <img id="photoWidePreview" class="photo-preview">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>打設写真②（アップ・詳細）<span class="req">必須</span></label>
+        <div class="photo-box" onclick="document.getElementById('photoCloseInput').click()">
+          📷 アップの写真を撮影・選択
+          <input type="file" id="photoCloseInput" accept="image/*" capture="environment" class="hidden" onchange="previewImage(this, 'photoClosePreview')">
+          <img id="photoClosePreview" class="photo-preview">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>お客様電話番号（見積アポ用）<span class="req">必須</span></label>
+        <input type="tel" id="updPhone" placeholder="例：090-1234-5678">
+      </div>
+      <div class="form-group">
+        <label>次回 見積提示予定日<span class="req">必須</span></label>
+        <input type="datetime-local" id="nextEstimateDate">
+      </div>
+    </div>
+
+    <!-- ② 見積実施用フィールド -->
+    <div id="phaseEstimate" class="hidden">
+      <div class="form-group">
+        <label>見積実施日<span class="req">必須</span></label>
+        <input type="date" id="estimateDoneDate">
+      </div>
+      <div class="form-group">
+        <label>見積提示金額（円・半角数字）<span class="req">必須</span></label>
+        <input type="number" id="estimateAmount" placeholder="例：1200000">
+      </div>
+      <div class="form-group">
+        <label>相見積もり状況</label>
+        <input type="text" id="competitorStatus" placeholder="例：他社1社あり（塗装専門）">
+      </div>
+      <div class="form-group">
+        <label>契約判断予定日（追客日）</label>
+        <input type="date" id="nextContractDate">
+      </div>
+    </div>
+
+    <!-- ③ 契約・失注用フィールド -->
+    <div id="phaseContract" class="hidden">
+      <div class="form-group">
+        <label>最終結果<span class="req">必須</span></label>
+        <select id="finalResult" onchange="toggleContractResult()">
+          <option value="成約">成約（契約締結）</option>
+          <option value="失注">失注・キャンセル</option>
+        </select>
+      </div>
+      <div id="contractWinFields">
+        <div class="form-group">
+          <label>お客様フルネーム<span class="req">必須</span></label>
+          <input type="text" id="fullName" placeholder="例：佐藤 健一">
+        </div>
+        <div class="form-group">
+          <label>契約日<span class="req">必須</span></label>
+          <input type="date" id="contractDate">
+        </div>
+        <div class="form-group">
+          <label>契約金額（円）<span class="req">必須</span></label>
+          <input type="number" id="contractAmount" placeholder="例：1150000">
+        </div>
+        <div class="form-group">
+          <label>工事原価（円）</label>
+          <input type="number" id="costAmount" placeholder="例：650000">
+        </div>
+      </div>
+      <div id="contractLostFields" class="hidden">
+        <div class="form-group">
+          <label>失注分類</label>
+          <select id="lostCategory">
+            <option value="価格（高い）">価格（高い）</option>
+            <option value="時期尚早（今ではない）">時期尚早（今ではない）</option>
+            <option value="他社決定（競合負け）">他社決定（競合負け）</option>
+            <option value="家族反対（決裁不一致）">家族反対（決裁不一致）</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>失注詳細理由</label>
+          <textarea id="lostDetail" placeholder="例：来年の春に再度検討したいとのこと"></textarea>
+        </div>
+        <div class="form-group">
+          <label>次回追客期日</label>
+          <input type="date" id="nextActionDate">
+        </div>
+      </div>
+    </div>
+
+    <!-- ④ 予定日変更用フィールド -->
+    <div id="phaseDateChange" class="hidden">
+      <div class="form-group">
+        <label>変更後のコーキング予定日（変更時のみ）</label>
+        <input type="datetime-local" id="newCaulkingDate">
+      </div>
+      <div class="form-group">
+        <label>変更後の見積提示予定日（変更時のみ）</label>
+        <input type="datetime-local" id="newEstimateDate">
+      </div>
+      <div class="form-group">
+        <label>新しい予定日カード写真</label>
+        <div class="photo-box" onclick="document.getElementById('newCardPhotoInput').click()">
+          📷 書き直したカードを撮影
+          <input type="file" id="newCardPhotoInput" accept="image/*" capture="environment" class="hidden" onchange="previewImage(this, 'newCardPhotoPreview')">
+          <img id="newCardPhotoPreview" class="photo-preview">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>変更理由<span class="req">必須</span></label>
+        <input type="text" id="changeReason" placeholder="例：雨天のためお客様と相談し日程変更">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>追加メモ・引き継ぎ事項</label>
+      <textarea id="updMemo" placeholder="特記事項があれば入力"></textarea>
+    </div>
+
+    <button type="submit" class="btn btn-submit">進捗報告を送信する</button>
+  </form>
+</div>
+
+<script>
+  // ==========================================
+  // 本番設定値（反映済み）
+  // ==========================================
+  const LIFF_ID = "2012508151-MuyzpH3P";
+  const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxnrZioYunycteoCOaixa2YVBAnvDC0OXmdhdve5rZpKUNNgYaUBpY2IE8jzGqW7EY6wg/exec";
+
+  let currentUserId = "";
+  let currentStaffName = "";
+
+  // 初期化（LINE IDの100%自動取得）
+  window.onload = async function() {
+    try {
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
+      }
+      const profile = await liff.getProfile();
+      currentUserId = profile.userId;
+      currentStaffName = profile.displayName;
+      document.getElementById('displayStaffName').innerText = currentStaffName;
+    } catch (err) {
+      alert("LINE認証エラー: " + err);
+    } finally {
+      document.getElementById('loadingOverlay').classList.add('hidden');
+    }
+  };
+
+  // タブ切替
+  function switchMode(mode) {
+    document.getElementById('tabRegister').classList.toggle('active', mode === 'register');
+    document.getElementById('tabUpdate').classList.toggle('active', mode === 'update');
+    document.getElementById('formRegister').classList.toggle('hidden', mode !== 'register');
+    document.getElementById('formUpdate').classList.toggle('hidden', mode !== 'update');
+  }
+
+  // 初回ルート切替（コーキング vs 見積）
+  function toggleRouteFields() {
+    const route = document.getElementById('startRoute').value;
+    document.getElementById('caulkingFields').classList.toggle('hidden', route !== 'コーキング取得から');
+    document.getElementById('estimateFields').classList.toggle('hidden', route !== '見積取得から');
+  }
+
+  // 進捗フェーズ切替
+  function togglePhaseFields() {
+    const phase = document.getElementById('updatePhase').value;
+    document.getElementById('phaseCaulking').classList.toggle('hidden', phase !== 'caulking_done');
+    document.getElementById('phaseEstimate').classList.toggle('hidden', phase !== 'estimate_done');
+    document.getElementById('phaseContract').classList.toggle('hidden', phase !== 'contract_done');
+    document.getElementById('phaseDateChange').classList.toggle('hidden', phase !== 'date_change');
+  }
+
+  // 成約・失注切替
+  function toggleContractResult() {
+    const res = document.getElementById('finalResult').value;
+    document.getElementById('contractWinFields').classList.toggle('hidden', res !== '成約');
+    document.getElementById('contractLostFields').classList.toggle('hidden', res !== '失注');
+  }
+
+  // LIFFカメラでQRコード読取
+  async function scanQRCode() {
+    if (!liff.scanCodeV2) {
+      alert("この端末またはブラウザではQRコードリーダーが利用できません。案件番号を手入力してください。");
+      return;
+    }
+    try {
+      const result = await liff.scanCodeV2();
+      if (result && result.value) {
+        document.getElementById('updCaseId').value = result.value;
+        alert("案件番号「" + result.value + "」を読み取りました！");
+      }
+    } catch (err) {
+      alert("QR読取キャンセルまたはエラー: " + err);
+    }
+  }
+
+  // 画像プレビュー表示
+  function previewImage(input, previewId) {
+    const file = input.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = document.getElementById(previewId);
+        img.src = e.target.result;
+        img.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  // 画像Base64変換（圧縮付き・通信軽量化）
+  function getResizedBase64(fileInputId) {
+    return new Promise((resolve) => {
+      const input = document.getElementById(fileInputId);
+      if (!input || !input.files || !input.files[0]) {
+        resolve("");
+        return;
+      }
+      const file = input.files[0];
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const maxDim = 1000;
+          let w = img.width, h = img.height;
+          if (w > h && w > maxDim) { h *= maxDim / w; w = maxDim; }
+          else if (h > maxDim) { w *= maxDim / h; h = maxDim; }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.75));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // フォーム送信処理
+  async function submitForm(e, actionType) {
+    e.preventDefault();
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.classList.remove('hidden');
+
+    try {
+      let payload = {
+        action: actionType,
+        lineUserId: currentUserId,
+        staffName: currentStaffName
+      };
+
+      if (actionType === 'register') {
+        payload.startRoute = document.getElementById('startRoute').value;
+        payload.lastName = document.getElementById('regLastName').value;
+        payload.address = document.getElementById('regAddress').value;
+        payload.caulkingDate = document.getElementById('caulkingDate').value.replace('T', ' ');
+        payload.caulkingColor = document.getElementById('caulkingColor').value;
+        payload.phone = document.getElementById('regPhone').value;
+        payload.estimateDate = document.getElementById('regEstimateDate').value.replace('T', ' ');
+        payload.memo = document.getElementById('regMemo').value;
+        payload.cardPhotoBase64 = await getResizedBase64('cardPhotoInput');
+      } else {
+        payload.caseId = document.getElementById('updCaseId').value;
+        payload.lastName = document.getElementById('updLastName').value;
+        payload.address = document.getElementById('updAddress').value;
+        payload.phase = document.getElementById('updatePhase').value;
+        payload.memo = document.getElementById('updMemo').value;
+
+        if (payload.phase === 'caulking_done') {
+          payload.caulkingDoneDate = document.getElementById('caulkingDoneDate').value;
+          payload.craftsmanName = document.getElementById('craftsmanName').value;
+          payload.phone = document.getElementById('updPhone').value;
+          payload.nextEstimateDate = document.getElementById('nextEstimateDate').value.replace('T', ' ');
+          payload.photoWideBase64 = await getResizedBase64('photoWideInput');
+          payload.photoCloseBase64 = await getResizedBase64('photoCloseInput');
+        } else if (payload.phase === 'estimate_done') {
+          payload.estimateDoneDate = document.getElementById('estimateDoneDate').value;
+          payload.estimateAmount = document.getElementById('estimateAmount').value;
+          payload.competitorStatus = document.getElementById('competitorStatus').value;
+          payload.nextContractDate = document.getElementById('nextContractDate').value;
+        } else if (payload.phase === 'contract_done') {
+          payload.finalResult = document.getElementById('finalResult').value;
+          payload.fullName = document.getElementById('fullName').value;
+          payload.contractDate = document.getElementById('contractDate').value;
+          payload.contractAmount = document.getElementById('contractAmount').value;
+          payload.costAmount = document.getElementById('costAmount').value;
+          payload.lostCategory = document.getElementById('lostCategory').value;
+          payload.lostDetail = document.getElementById('lostDetail').value;
+          payload.nextActionDate = document.getElementById('nextActionDate').value;
+        } else if (payload.phase === 'date_change') {
+          payload.newCaulkingDate = document.getElementById('newCaulkingDate').value.replace('T', ' ');
+          payload.newEstimateDate = document.getElementById('newEstimateDate').value.replace('T', ' ');
+          payload.reason = document.getElementById('changeReason').value;
+          payload.newCardPhotoBase64 = await getResizedBase64('newCardPhotoInput');
+        }
+      }
+
+      const response = await fetch(GAS_API_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        alert("✅ " + result.message);
+        if (liff.isInClient()) {
+          liff.closeWindow();
+        } else {
+          location.reload();
+        }
+      } else {
+        alert("❌ エラー: " + result.message);
+      }
+    } catch (err) {
+      alert("通信エラーが発生しました: " + err);
+    } finally {
+      overlay.classList.add('hidden');
+    }
+  }
+</script>
+</body>
+</html>
