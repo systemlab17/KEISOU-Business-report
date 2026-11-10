@@ -269,4 +269,245 @@
       </div>
       <div class="form-group">
         <label>変更後の見積提示予定日（変更時のみ）</label>
-        <input type
+        <input type="datetime-local" id="newEstimateDate">
+      </div>
+      <div class="form-group">
+        <label>新しい予定日カード写真</label>
+        <div class="photo-box" onclick="document.getElementById('newCardPhotoInput').click()">
+          📷 書き直したカードを撮影
+          <input type="file" id="newCardPhotoInput" accept="image/*" capture="environment" class="hidden" onchange="previewImage(this, 'newCardPhotoPreview')">
+          <img id="newCardPhotoPreview" class="photo-preview">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>変更理由<span class="req">必須</span></label>
+        <input type="text" id="changeReason" placeholder="例：雨天のためお客様と相談し日程変更">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>追加メモ・引き継ぎ事項</label>
+      <textarea id="updMemo" placeholder="特記事項があれば入力"></textarea>
+    </div>
+
+    <button type="submit" id="btnUpdSubmit" class="btn btn-submit">進捗報告を送信する</button>
+  </form>
+</div>
+
+<script>
+  const LIFF_ID = "2012508151-MuyzpH3P";
+  const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxnrZioYunycteoCOaixa2YVBAnvDC0OXmdhdve5rZpKUNNgYaUBpY2IE8jzGqW7EY6wg/exec";
+
+  let currentUserId = "";
+  let currentStaffName = "";
+
+  // 初期化（LINE ID取得 ＆ GAS側での在籍確認・初回自動仮登録）
+  window.onload = async function() {
+    try {
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
+      }
+      const profile = await liff.getProfile();
+      currentUserId = profile.userId;
+      currentStaffName = profile.displayName;
+      document.getElementById('displayStaffName').innerText = currentStaffName;
+      document.getElementById('displayUserId').innerText = currentUserId;
+
+      // GASへ在籍確認・初回自動登録リクエスト
+      const res = await fetch(GAS_API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'auth',
+          lineUserId: currentUserId,
+          displayName: currentStaffName
+        })
+      });
+      const authData = await res.json();
+
+      if (authData.success) {
+        currentStaffName = authData.staffName; // マスタ側の正式氏名に更新
+        document.getElementById('displayStaffName').innerText = currentStaffName;
+        document.getElementById('statusIndicator').innerText = "✅ 在籍確認済";
+      } else {
+        // 退職済み・未承認の場合は入力フォームを隠してロック表示
+        document.getElementById('statusIndicator').innerText = "⛔ アクセス制限中";
+        document.getElementById('formRegister').innerHTML = `<div style="color:#DC2626; font-weight:bold; padding:20px; text-align:center;">${authData.message}</div>`;
+        document.getElementById('formUpdate').innerHTML = `<div style="color:#DC2626; font-weight:bold; padding:20px; text-align:center;">${authData.message}</div>`;
+      }
+    } catch (err) {
+      document.getElementById('statusIndicator').innerText = "認証エラー";
+      alert("LINE認証エラー: " + err);
+    }
+  };
+
+  function switchMode(mode) {
+    document.getElementById('tabRegister').classList.toggle('active', mode === 'register');
+    document.getElementById('tabUpdate').classList.toggle('active', mode === 'update');
+    document.getElementById('formRegister').classList.toggle('hidden', mode !== 'register');
+    document.getElementById('formUpdate').classList.toggle('hidden', mode !== 'update');
+  }
+
+  function toggleRouteFields() {
+    const route = document.getElementById('startRoute').value;
+    document.getElementById('caulkingFields').classList.toggle('hidden', route !== 'コーキング取得から');
+    document.getElementById('estimateFields').classList.toggle('hidden', route !== '見積取得から');
+  }
+
+  function togglePhaseFields() {
+    const phase = document.getElementById('updatePhase').value;
+    document.getElementById('phaseCaulking').classList.toggle('hidden', phase !== 'caulking_done');
+    document.getElementById('phaseEstimate').classList.toggle('hidden', phase !== 'estimate_done');
+    document.getElementById('phaseContract').classList.toggle('hidden', phase !== 'contract_done');
+    document.getElementById('phaseDateChange').classList.toggle('hidden', phase !== 'date_change');
+  }
+
+  function toggleContractResult() {
+    const res = document.getElementById('finalResult').value;
+    document.getElementById('contractWinFields').classList.toggle('hidden', res !== '成約');
+    document.getElementById('contractLostFields').classList.toggle('hidden', res !== '失注');
+  }
+
+  async function scanQRCode() {
+    if (!liff.scanCodeV2) {
+      alert("この端末ではQRコードリーダーが利用できません。案件番号を手入力してください。");
+      return;
+    }
+    try {
+      const result = await liff.scanCodeV2();
+      if (result && result.value) {
+        document.getElementById('updCaseId').value = result.value;
+        alert("案件番号「" + result.value + "」を読み取りました！");
+      }
+    } catch (err) {
+      alert("QR読取エラー: " + err);
+    }
+  }
+
+  function previewImage(input, previewId) {
+    const file = input.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = document.getElementById(previewId);
+        img.src = e.target.result;
+        img.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function getResizedBase64(fileInputId) {
+    return new Promise((resolve) => {
+      const input = document.getElementById(fileInputId);
+      if (!input || !input.files || !input.files[0]) {
+        resolve("");
+        return;
+      }
+      const file = input.files[0];
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const maxDim = 1000;
+          let w = img.width, h = img.height;
+          if (w > h && w > maxDim) { h *= maxDim / w; w = maxDim; }
+          else if (h > maxDim) { w *= maxDim / h; h = maxDim; }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.75));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function submitForm(e, actionType) {
+    e.preventDefault();
+    const btn = actionType === 'register' ? document.getElementById('btnRegSubmit') : document.getElementById('btnUpdSubmit');
+    const origText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = "送信中...（そのままお待ちください）";
+
+    try {
+      let payload = {
+        action: actionType,
+        lineUserId: currentUserId,
+        staffName: currentStaffName
+      };
+
+      if (actionType === 'register') {
+        payload.startRoute = document.getElementById('startRoute').value;
+        payload.lastName = document.getElementById('regLastName').value;
+        payload.address = document.getElementById('regAddress').value;
+        payload.caulkingDate = document.getElementById('caulkingDate').value.replace('T', ' ');
+        payload.caulkingColor = document.getElementById('caulkingColor').value;
+        payload.phone = document.getElementById('regPhone').value;
+        payload.estimateDate = document.getElementById('regEstimateDate').value.replace('T', ' ');
+        payload.memo = document.getElementById('regMemo').value;
+        payload.cardPhotoBase64 = await getResizedBase64('cardPhotoInput');
+      } else {
+        payload.caseId = document.getElementById('updCaseId').value;
+        payload.lastName = document.getElementById('updLastName').value;
+        payload.address = document.getElementById('updAddress').value;
+        payload.phase = document.getElementById('updatePhase').value;
+        payload.memo = document.getElementById('updMemo').value;
+
+        if (payload.phase === 'caulking_done') {
+          payload.caulkingDoneDate = document.getElementById('caulkingDoneDate').value;
+          payload.craftsmanName = document.getElementById('craftsmanName').value;
+          payload.phone = document.getElementById('updPhone').value;
+          payload.nextEstimateDate = document.getElementById('nextEstimateDate').value.replace('T', ' ');
+          payload.photoWideBase64 = await getResizedBase64('photoWideInput');
+          payload.photoCloseBase64 = await getResizedBase64('photoCloseInput');
+        } else if (payload.phase === 'estimate_done') {
+          payload.estimateDoneDate = document.getElementById('estimateDoneDate').value;
+          payload.estimateAmount = document.getElementById('estimateAmount').value;
+          payload.competitorStatus = document.getElementById('competitorStatus').value;
+          payload.nextContractDate = document.getElementById('nextContractDate').value;
+        } else if (payload.phase === 'contract_done') {
+          payload.finalResult = document.getElementById('finalResult').value;
+          payload.fullName = document.getElementById('fullName').value;
+          payload.contractDate = document.getElementById('contractDate').value;
+          payload.contractAmount = document.getElementById('contractAmount').value;
+          payload.costAmount = document.getElementById('costAmount').value;
+          payload.lostCategory = document.getElementById('lostCategory').value;
+          payload.lostDetail = document.getElementById('lostDetail').value;
+          payload.nextActionDate = document.getElementById('nextActionDate').value;
+        } else if (payload.phase === 'date_change') {
+          payload.newCaulkingDate = document.getElementById('newCaulkingDate').value.replace('T', ' ');
+          payload.newEstimateDate = document.getElementById('newEstimateDate').value.replace('T', ' ');
+          payload.reason = document.getElementById('changeReason').value;
+          payload.newCardPhotoBase64 = await getResizedBase64('newCardPhotoInput');
+        }
+      }
+
+      const response = await fetch(GAS_API_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        alert("✅ " + result.message);
+        if (liff.isInClient()) {
+          liff.closeWindow();
+        } else {
+          location.reload();
+        }
+      } else {
+        alert("❌ エラー: " + result.message);
+      }
+    } catch (err) {
+      alert("通信エラーが発生しました: " + err);
+    } finally {
+      btn.disabled = false;
+      btn.innerText = origText;
+    }
+  }
+</script>
+</body>
+</html>
