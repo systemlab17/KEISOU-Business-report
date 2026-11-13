@@ -106,12 +106,9 @@
         </div>
         <div class="form-group">
           <label>コーキングの色<span class="req">必須</span></label>
+          <!-- 選択肢マスタから自動生成されます -->
           <select id="caulkingColor">
-            <option value="ホワイト">ホワイト</option>
-            <option value="グレー">グレー</option>
-            <option value="アンバー">アンバー</option>
-            <option value="ブラック">ブラック</option>
-            <option value="特注色">特注色</option>
+            <option value="">読み込み中...</option>
           </select>
         </div>
       </div>
@@ -261,12 +258,9 @@
         <div id="contractLostFields" class="hidden">
           <div class="form-group">
             <label>失注分類</label>
+            <!-- 選択肢マスタから自動生成されます -->
             <select id="lostCategory">
-              <option value="価格（高い）">価格（高い）</option>
-              <option value="時期尚早（今ではない）">時期尚早（今ではない）</option>
-              <option value="他社決定（競合負け）">他社決定（競合負け）</option>
-              <option value="家族反対（決裁不一致）">家族反対（決裁不一致）</option>
-              <option value="その他">その他</option>
+              <option value="">読み込み中...</option>
             </select>
           </div>
           <div class="form-group">
@@ -342,6 +336,11 @@
       });
       const data = await res.json();
 
+      // マスタ選択肢（コーキング色・失注分類）の自動反映
+      if (data.options) {
+        populateMasterOptions(data.options);
+      }
+
       if (data.status === 'active') {
         currentStaffName = data.staffName;
         document.getElementById('displayStaffName').innerText = currentStaffName;
@@ -366,6 +365,24 @@
       alert("通信エラー: " + err);
     }
   };
+
+  // スプレッドシートの選択肢マスタをプルダウンに流し込む処理
+  function populateMasterOptions(options) {
+    if (options.caulkingColors && options.caulkingColors.length > 0) {
+      const cSelect = document.getElementById('caulkingColor');
+      cSelect.innerHTML = '';
+      options.caulkingColors.forEach(color => {
+        cSelect.innerHTML += `<option value="${color}">${color}</option>`;
+      });
+    }
+    if (options.lostCategories && options.lostCategories.length > 0) {
+      const lSelect = document.getElementById('lostCategory');
+      lSelect.innerHTML = '';
+      options.lostCategories.forEach(cat => {
+        lSelect.innerHTML += `<option value="${cat}">${cat}</option>`;
+      });
+    }
+  }
 
   async function submitStaffLink() {
     const staffId = document.getElementById('selectStaffId').value;
@@ -398,7 +415,6 @@
     document.getElementById('formUpdate').classList.toggle('hidden', mode !== 'update');
   }
 
-  // ルート切替（コーキング / 見積 / 同時取得）
   function toggleRouteFields() {
     const route = document.getElementById('startRoute').value;
     const cFields = document.getElementById('caulkingFields');
@@ -411,7 +427,6 @@
       cFields.classList.add('hidden');
       eFields.classList.remove('hidden');
     } else if (route === 'コーキングと見積の同時取得') {
-      // 両方の入力欄を表示
       cFields.classList.remove('hidden');
       eFields.classList.remove('hidden');
     }
