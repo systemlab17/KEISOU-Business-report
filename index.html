@@ -45,7 +45,6 @@
 <header>塗装営業 現場報告システム</header>
 
 <div class="container">
-  <!-- ログイン担当者表示 -->
   <div class="staff-badge">
     <div style="display:flex; justify-content:space-between;">
       <span>担当：<strong id="displayStaffName">確認中...</strong></span>
@@ -56,7 +55,7 @@
     </div>
   </div>
 
-  <!-- 初回氏名選択カード（未紐付け時のみ表示） -->
+  <!-- 初回氏名選択カード -->
   <div id="linkCard" class="card hidden">
     <h3 style="margin-top:0; color:var(--primary); font-size:16px;">初回担当者登録</h3>
     <p style="font-size:13px; color:#4B5563;">
@@ -69,9 +68,8 @@
     <button type="button" class="btn btn-submit" onclick="submitStaffLink()">この担当者として連携する</button>
   </div>
 
-  <!-- メイン操作エリア（認証成功時に表示） -->
+  <!-- メイン操作エリア -->
   <div id="mainApp" class="hidden">
-    <!-- メインモード切替タブ -->
     <div class="tabs">
       <button type="button" class="tab-btn active" id="tabRegister" onclick="switchMode('register')">① 新規登録<br><span style="font-size:11px;font-weight:normal;">(初回飛び込み)</span></button>
       <button type="button" class="tab-btn" id="tabUpdate" onclick="switchMode('update')">② 進捗報告<br><span style="font-size:11px;font-weight:normal;">(打設・見積・契約)</span></button>
@@ -98,7 +96,6 @@
         <input type="text" id="regAddress" placeholder="例：世田谷区桜丘1-2-3" required>
       </div>
 
-      <!-- コーキング取得関連フィールド -->
       <div id="caulkingFields">
         <div class="form-group">
           <label>コーキング打設予定日<span class="req">必須</span></label>
@@ -106,14 +103,12 @@
         </div>
         <div class="form-group">
           <label>コーキングの色<span class="req">必須</span></label>
-          <!-- 選択肢マスタから自動生成されます -->
           <select id="caulkingColor">
             <option value="">読み込み中...</option>
           </select>
         </div>
       </div>
 
-      <!-- 見積取得関連フィールド -->
       <div id="estimateFields" class="hidden">
         <div class="form-group">
           <label>電話番号<span class="req">必須</span></label>
@@ -168,13 +163,14 @@
       <div class="form-group">
         <label>報告する工程（フェーズ）<span class="req">必須</span></label>
         <select id="updatePhase" onchange="togglePhaseFields()" required>
-          <option value="caulking_done">① コーキング打設完了（写真・見積日）</option>
+          <option value="caulking_done">① コーキング打設完了（写真・次回予定）</option>
           <option value="estimate_done">② 見積実施（提示金額・相見積状況）</option>
           <option value="contract_done">③ 商談結果（契約締結 / 失注）</option>
           <option value="date_change">④ 予定日の変更報告</option>
         </select>
       </div>
 
+      <!-- ① 打設完了用フィールド -->
       <div id="phaseCaulking">
         <div class="form-group">
           <label>打設完了日<span class="req">必須</span></label>
@@ -200,16 +196,37 @@
             <img id="photoClosePreview" class="photo-preview">
           </div>
         </div>
+
+        <!-- 次回予定（選択肢マスタ連動） -->
         <div class="form-group">
-          <label>お客様電話番号（見積アポ用）<span class="req">必須</span></label>
-          <input type="tel" id="updPhone" placeholder="例：090-1234-5678">
+          <label>次回予定（打設後アクション）<span class="req">必須</span></label>
+          <select id="nextActionType" onchange="toggleNextActionFields()">
+            <option value="">読み込み中...</option>
+          </select>
         </div>
-        <div class="form-group">
-          <label>次回 見積提示予定日<span class="req">必須</span></label>
-          <input type="datetime-local" id="nextEstimateDate">
+
+        <!-- 見積提示を選んだ場合の欄 -->
+        <div id="boxNextEstimate" class="hidden">
+          <div class="form-group">
+            <label>お客様電話番号（見積アポ用）<span class="req">必須</span></label>
+            <input type="tel" id="updPhone" placeholder="例：090-1234-5678">
+          </div>
+          <div class="form-group">
+            <label>次回 見積提示予定日<span class="req">必須</span></label>
+            <input type="datetime-local" id="nextEstimateDate">
+          </div>
+        </div>
+
+        <!-- 再訪問等を選んだ場合の欄 -->
+        <div id="boxNextRevisit" class="hidden">
+          <div class="form-group">
+            <label>次回 再訪問・追客予定日</label>
+            <input type="date" id="nextActionDateCaulking">
+          </div>
         </div>
       </div>
 
+      <!-- ② 見積実施用フィールド -->
       <div id="phaseEstimate" class="hidden">
         <div class="form-group">
           <label>見積実施日<span class="req">必須</span></label>
@@ -229,6 +246,7 @@
         </div>
       </div>
 
+      <!-- ③ 契約・失注用フィールド -->
       <div id="phaseContract" class="hidden">
         <div class="form-group">
           <label>最終結果<span class="req">必須</span></label>
@@ -258,7 +276,6 @@
         <div id="contractLostFields" class="hidden">
           <div class="form-group">
             <label>失注分類</label>
-            <!-- 選択肢マスタから自動生成されます -->
             <select id="lostCategory">
               <option value="">読み込み中...</option>
             </select>
@@ -274,6 +291,7 @@
         </div>
       </div>
 
+      <!-- ④ 予定日変更用フィールド -->
       <div id="phaseDateChange" class="hidden">
         <div class="form-group">
           <label>変更後のコーキング予定日（変更時のみ）</label>
@@ -336,7 +354,6 @@
       });
       const data = await res.json();
 
-      // マスタ選択肢（コーキング色・失注分類）の自動反映
       if (data.options) {
         populateMasterOptions(data.options);
       }
@@ -366,7 +383,7 @@
     }
   };
 
-  // スプレッドシートの選択肢マスタをプルダウンに流し込む処理
+  // 選択肢マスタの自動反映（コーキング色・失注分類・次回予定）
   function populateMasterOptions(options) {
     if (options.caulkingColors && options.caulkingColors.length > 0) {
       const cSelect = document.getElementById('caulkingColor');
@@ -381,6 +398,31 @@
       options.lostCategories.forEach(cat => {
         lSelect.innerHTML += `<option value="${cat}">${cat}</option>`;
       });
+    }
+    if (options.nextActions && options.nextActions.length > 0) {
+      const nSelect = document.getElementById('nextActionType');
+      nSelect.innerHTML = '<option value="">-- 次回予定を選択 --</option>';
+      options.nextActions.forEach(act => {
+        nSelect.innerHTML += `<option value="${act}">${act}</option>`;
+      });
+    }
+  }
+
+  // 次回予定に応じた入力欄の切り替え
+  function toggleNextActionFields() {
+    const act = document.getElementById('nextActionType').value;
+    const estBox = document.getElementById('boxNextEstimate');
+    const revBox = document.getElementById('boxNextRevisit');
+
+    if (act.includes('見積')) {
+      estBox.classList.remove('hidden');
+      revBox.classList.add('hidden');
+    } else if (act.includes('終了') || act.includes('なし')) {
+      estBox.classList.add('hidden');
+      revBox.classList.add('hidden');
+    } else {
+      estBox.classList.add('hidden');
+      revBox.classList.remove('hidden');
     }
   }
 
@@ -536,8 +578,10 @@
         if (payload.phase === 'caulking_done') {
           payload.caulkingDoneDate = document.getElementById('caulkingDoneDate').value;
           payload.craftsmanName = document.getElementById('craftsmanName').value;
+          payload.nextActionType = document.getElementById('nextActionType').value;
           payload.phone = document.getElementById('updPhone').value;
           payload.nextEstimateDate = document.getElementById('nextEstimateDate').value.replace('T', ' ');
+          payload.nextActionDate = document.getElementById('nextActionDateCaulking').value;
           payload.photoWideBase64 = await getResizedBase64('photoWideInput');
           payload.photoCloseBase64 = await getResizedBase64('photoCloseInput');
         } else if (payload.phase === 'estimate_done') {
