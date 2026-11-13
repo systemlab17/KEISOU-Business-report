@@ -164,7 +164,7 @@
         <label>報告する工程（フェーズ）<span class="req">必須</span></label>
         <select id="updatePhase" onchange="togglePhaseFields()" required>
           <option value="caulking_done">① コーキング打設完了（写真・次回予定）</option>
-          <option value="estimate_done">② 見積実施（提示金額・相見積状況）</option>
+          <option value="estimate_done">② 見積実施（商談予定日・状況）</option>
           <option value="contract_done">③ 商談結果（契約締結 / 失注）</option>
           <option value="date_change">④ 予定日の変更報告</option>
         </select>
@@ -197,7 +197,6 @@
           </div>
         </div>
 
-        <!-- 次回予定（選択肢マスタ連動） -->
         <div class="form-group">
           <label>次回予定（打設後アクション）<span class="req">必須</span></label>
           <select id="nextActionType" onchange="toggleNextActionFields()">
@@ -205,7 +204,6 @@
           </select>
         </div>
 
-        <!-- 見積提示を選んだ場合の欄 -->
         <div id="boxNextEstimate" class="hidden">
           <div class="form-group">
             <label>お客様電話番号（見積アポ用）<span class="req">必須</span></label>
@@ -217,7 +215,6 @@
           </div>
         </div>
 
-        <!-- 再訪問等を選んだ場合の欄 -->
         <div id="boxNextRevisit" class="hidden">
           <div class="form-group">
             <label>次回 再訪問・追客予定日</label>
@@ -226,23 +223,19 @@
         </div>
       </div>
 
-      <!-- ② 見積実施用フィールド -->
+      <!-- ② 見積実施用フィールド（修正：金額・判断日を削除し商談予定日へ） -->
       <div id="phaseEstimate" class="hidden">
         <div class="form-group">
           <label>見積実施日<span class="req">必須</span></label>
           <input type="date" id="estimateDoneDate">
         </div>
         <div class="form-group">
-          <label>見積提示金額（円・半角数字）<span class="req">必須</span></label>
-          <input type="number" id="estimateAmount" placeholder="例：1200000">
+          <label>次回 商談予定日（見積説明アポ）<span class="req">必須</span></label>
+          <input type="datetime-local" id="meetingDate" required>
         </div>
         <div class="form-group">
           <label>相見積もり状況</label>
           <input type="text" id="competitorStatus" placeholder="例：他社1社あり（塗装専門）">
-        </div>
-        <div class="form-group">
-          <label>契約判断予定日（追客日）</label>
-          <input type="date" id="nextContractDate">
         </div>
       </div>
 
@@ -383,7 +376,6 @@
     }
   };
 
-  // 選択肢マスタの自動反映（コーキング色・失注分類・次回予定）
   function populateMasterOptions(options) {
     if (options.caulkingColors && options.caulkingColors.length > 0) {
       const cSelect = document.getElementById('caulkingColor');
@@ -408,7 +400,6 @@
     }
   }
 
-  // 次回予定に応じた入力欄の切り替え
   function toggleNextActionFields() {
     const act = document.getElementById('nextActionType').value;
     const estBox = document.getElementById('boxNextEstimate');
@@ -585,10 +576,10 @@
           payload.photoWideBase64 = await getResizedBase64('photoWideInput');
           payload.photoCloseBase64 = await getResizedBase64('photoCloseInput');
         } else if (payload.phase === 'estimate_done') {
+          // 【修正】見積実施時：金額・判断日を外し商談予定日を送信
           payload.estimateDoneDate = document.getElementById('estimateDoneDate').value;
-          payload.estimateAmount = document.getElementById('estimateAmount').value;
+          payload.meetingDate = document.getElementById('meetingDate').value.replace('T', ' ');
           payload.competitorStatus = document.getElementById('competitorStatus').value;
-          payload.nextContractDate = document.getElementById('nextContractDate').value;
         } else if (payload.phase === 'contract_done') {
           payload.finalResult = document.getElementById('finalResult').value;
           payload.fullName = document.getElementById('fullName').value;
