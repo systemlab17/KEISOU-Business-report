@@ -84,6 +84,7 @@
         <select id="startRoute" onchange="toggleRouteFields()" required>
           <option value="コーキング取得から">コーキング取得から（標準）</option>
           <option value="見積取得から">見積取得から（外壁全体希望）</option>
+          <option value="コーキングと見積の同時取得">コーキングと見積の同時取得</option>
         </select>
       </div>
 
@@ -97,6 +98,7 @@
         <input type="text" id="regAddress" placeholder="例：世田谷区桜丘1-2-3" required>
       </div>
 
+      <!-- コーキング取得関連フィールド -->
       <div id="caulkingFields">
         <div class="form-group">
           <label>コーキング打設予定日<span class="req">必須</span></label>
@@ -114,6 +116,7 @@
         </div>
       </div>
 
+      <!-- 見積取得関連フィールド -->
       <div id="estimateFields" class="hidden">
         <div class="form-group">
           <label>電話番号<span class="req">必須</span></label>
@@ -329,7 +332,6 @@
       currentStaffName = profile.displayName;
       document.getElementById('displayUserId').innerText = currentUserId;
 
-      // 在籍・紐付け状況チェック
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         body: JSON.stringify({
@@ -341,13 +343,11 @@
       const data = await res.json();
 
       if (data.status === 'active') {
-        // 既に連携済みの正式氏名
         currentStaffName = data.staffName;
         document.getElementById('displayStaffName').innerText = currentStaffName;
         document.getElementById('statusIndicator').innerText = "✅ 在籍確認済";
         document.getElementById('mainApp').classList.remove('hidden');
       } else if (data.status === 'need_link') {
-        // 初回紐付け画面の表示
         document.getElementById('displayStaffName').innerText = currentStaffName + " (未連携)";
         document.getElementById('statusIndicator').innerText = "⚠️ 氏名未選択";
         document.getElementById('linkCard').classList.remove('hidden');
@@ -367,7 +367,6 @@
     }
   };
 
-  // 初回氏名連携送信
   async function submitStaffLink() {
     const staffId = document.getElementById('selectStaffId').value;
     if (!staffId) {
@@ -399,10 +398,23 @@
     document.getElementById('formUpdate').classList.toggle('hidden', mode !== 'update');
   }
 
+  // ルート切替（コーキング / 見積 / 同時取得）
   function toggleRouteFields() {
     const route = document.getElementById('startRoute').value;
-    document.getElementById('caulkingFields').classList.toggle('hidden', route !== 'コーキング取得から');
-    document.getElementById('estimateFields').classList.toggle('hidden', route !== '見積取得から');
+    const cFields = document.getElementById('caulkingFields');
+    const eFields = document.getElementById('estimateFields');
+
+    if (route === 'コーキング取得から') {
+      cFields.classList.remove('hidden');
+      eFields.classList.add('hidden');
+    } else if (route === '見積取得から') {
+      cFields.classList.add('hidden');
+      eFields.classList.remove('hidden');
+    } else if (route === 'コーキングと見積の同時取得') {
+      // 両方の入力欄を表示
+      cFields.classList.remove('hidden');
+      eFields.classList.remove('hidden');
+    }
   }
 
   function togglePhaseFields() {
