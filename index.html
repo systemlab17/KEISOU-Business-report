@@ -165,7 +165,7 @@
         <select id="updatePhase" onchange="togglePhaseFields()" required>
           <option value="caulking_done">① コーキング打設完了（写真・次回予定）</option>
           <option value="estimate_done">② 見積実施（商談予定日・状況）</option>
-          <option value="contract_done">③ 商談結果（契約締結 / 失注）</option>
+          <option value="contract_done">③ 商談結果（成約 / 次回商談 / 回答待ち / 失注）</option>
           <option value="date_change">④ 予定日の変更報告</option>
         </select>
       </div>
@@ -223,7 +223,7 @@
         </div>
       </div>
 
-      <!-- ② 見積実施用フィールド（修正：金額・判断日を削除し商談予定日へ） -->
+      <!-- ② 見積実施用フィールド -->
       <div id="phaseEstimate" class="hidden">
         <div class="form-group">
           <label>見積実施日<span class="req">必須</span></label>
@@ -231,7 +231,7 @@
         </div>
         <div class="form-group">
           <label>次回 商談予定日（見積説明アポ）<span class="req">必須</span></label>
-          <input type="datetime-local" id="meetingDate" required>
+          <input type="datetime-local" id="meetingDate">
         </div>
         <div class="form-group">
           <label>相見積もり状況</label>
@@ -239,15 +239,19 @@
         </div>
       </div>
 
-      <!-- ③ 契約・失注用フィールド -->
+      <!-- ③ 商談結果用フィールド（改修：4分岐 ＆ 成約時のみ契約日等を表示） -->
       <div id="phaseContract" class="hidden">
         <div class="form-group">
-          <label>最終結果<span class="req">必須</span></label>
+          <label>商談結果<span class="req">必須</span></label>
           <select id="finalResult" onchange="toggleContractResult()">
             <option value="成約">成約（契約締結）</option>
+            <option value="継続商談">継続商談（次回商談あり・2回目以降）</option>
+            <option value="回答待ち">検討中・回答待ち（追客）</option>
             <option value="失注">失注・キャンセル</option>
           </select>
         </div>
+
+        <!-- 成約時のみ表示される項目 -->
         <div id="contractWinFields">
           <div class="form-group">
             <label>お客様フルネーム<span class="req">必須</span></label>
@@ -266,6 +270,24 @@
             <input type="number" id="costAmount" placeholder="例：650000">
           </div>
         </div>
+
+        <!-- 継続商談時のみ表示される項目 -->
+        <div id="contractMeetingFields" class="hidden">
+          <div class="form-group">
+            <label>次回 商談予定日時<span class="req">必須</span></label>
+            <input type="datetime-local" id="nextMeetingDate">
+          </div>
+        </div>
+
+        <!-- 回答待ち時のみ表示される項目 -->
+        <div id="contractPendingFields" class="hidden">
+          <div class="form-group">
+            <label>次回 回答確認・追客日<span class="req">必須</span></label>
+            <input type="date" id="nextContactDate">
+          </div>
+        </div>
+
+        <!-- 失注時のみ表示される項目 -->
         <div id="contractLostFields" class="hidden">
           <div class="form-group">
             <label>失注分類</label>
@@ -278,7 +300,7 @@
             <textarea id="lostDetail" placeholder="例：来年の春に再度検討したいとのこと"></textarea>
           </div>
           <div class="form-group">
-            <label>次回追客期日</label>
+            <label>将来の再追客期日（あれば）</label>
             <input type="date" id="nextActionDate">
           </div>
         </div>
@@ -417,6 +439,15 @@
     }
   }
 
+  // 商談結果の4分岐切り替え
+  function toggleContractResult() {
+    const res = document.getElementById('finalResult').value;
+    document.getElementById('contractWinFields').classList.toggle('hidden', res !== '成約');
+    document.getElementById('contractMeetingFields').classList.toggle('hidden', res !== '継続商談');
+    document.getElementById('contractPendingFields').classList.toggle('hidden', res !== '回答待ち');
+    document.getElementById('contractLostFields').classList.toggle('hidden', res !== '失注');
+  }
+
   async function submitStaffLink() {
     const staffId = document.getElementById('selectStaffId').value;
     if (!staffId) {
@@ -471,12 +502,6 @@
     document.getElementById('phaseEstimate').classList.toggle('hidden', phase !== 'estimate_done');
     document.getElementById('phaseContract').classList.toggle('hidden', phase !== 'contract_done');
     document.getElementById('phaseDateChange').classList.toggle('hidden', phase !== 'date_change');
-  }
-
-  function toggleContractResult() {
-    const res = document.getElementById('finalResult').value;
-    document.getElementById('contractWinFields').classList.toggle('hidden', res !== '成約');
-    document.getElementById('contractLostFields').classList.toggle('hidden', res !== '失注');
   }
 
   async function scanQRCode() {
@@ -576,19 +601,33 @@
           payload.photoWideBase64 = await getResizedBase64('photoWideInput');
           payload.photoCloseBase64 = await getResizedBase64('photoCloseInput');
         } else if (payload.phase === 'estimate_done') {
-          // 【修正】見積実施時：金額・判断日を外し商談予定日を送信
           payload.estimateDoneDate = document.getElementById('estimateDoneDate').value;
           payload.meetingDate = document.getElementById('meetingDate').value.replace('T', ' ');
           payload.competitorStatus = document.getElementById('competitorStatus').value;
         } else if (payload.phase === 'contract_done') {
           payload.finalResult = document.getElementById('finalResult').value;
-          payload.fullName = document.getElementById('fullName').value;
-          payload.contractDate = document.getElementById('contractDate').value;
-          payload.contractAmount = document.getElementById('contractAmount').value;
-          payload.costAmount = document.getElementById('costAmount').value;
-          payload.lostCategory = document.getElementById('lostCategory').value;
-          payload.lostDetail = document.getElementById('lostDetail').value;
-          payload.nextActionDate = document.getElementById('nextActionDate').value;
+
+          // 結果別の値セット
+          if (payload.finalResult === '成約') {
+            payload.fullName = document.getElementById('fullName').value;
+            payload.contractDate = document.getElementById('contractDate').value;
+            payload.contractAmount = document.getElementById('contractAmount').value;
+            payload.costAmount = document.getElementById('costAmount').value;
+            if (!payload.contractDate || !payload.contractAmount) {
+              alert("成約時は契約日と契約金額を必ず入力してください");
+              btn.disabled = false;
+              btn.innerText = origText;
+              return;
+            }
+          } else if (payload.finalResult === '継続商談') {
+            payload.nextMeetingDate = document.getElementById('nextMeetingDate').value.replace('T', ' ');
+          } else if (payload.finalResult === '回答待ち') {
+            payload.nextContactDate = document.getElementById('nextContactDate').value;
+          } else if (payload.finalResult === '失注') {
+            payload.lostCategory = document.getElementById('lostCategory').value;
+            payload.lostDetail = document.getElementById('lostDetail').value;
+            payload.nextActionDate = document.getElementById('nextActionDate').value;
+          }
         } else if (payload.phase === 'date_change') {
           payload.newCaulkingDate = document.getElementById('newCaulkingDate').value.replace('T', ' ');
           payload.newEstimateDate = document.getElementById('newEstimateDate').value.replace('T', ' ');
